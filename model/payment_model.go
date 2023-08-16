@@ -1,12 +1,12 @@
 package model
 
 type CreatePaymentRequest struct {
-	CustName    string `json:"cust_name"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-	ServiceName string `json:"service_name"`
-	ServiceId   string `json:"service_id"`
-	BookingDate string `json:"booking_date"`
+	CustName    string `json:"cust_name" validate:"required"`
+	Email       string `json:"email" validate:"required,email"`
+	Phone       string `json:"phone" validate:"required,number"`
+	ServiceName string `json:"service_name" validate:"required"`
+	ServiceId   string `json:"service_id" validate:"required"`
+	BookingDate string `json:"booking_date" validate:"required"`
 }
 
 type CreateFaspayPaymentRequest struct {

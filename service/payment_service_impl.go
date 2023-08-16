@@ -39,6 +39,8 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 		}
 	}()
 
+	response_code := make(chan string, 1)
+
 	merchantId := os.Getenv("FASPAY_MERCHANT_ID")
 	userId := os.Getenv("FASPAY_USER_ID")
 	password := os.Getenv("FASPAY_PASSWORD")
@@ -99,24 +101,29 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 
 	response := make(map[string]interface{})
 	json.Unmarshal(resp.Body(), &response)
-	fmt.Println(response)
 	bookingDate, _ := time.Parse("2006-01-02", request.BookingDate)
-	payment := entity.Payment{
-		Name:          request.CustName,
-		Phone:         request.Phone,
-		Email:         request.Email,
-		BookingDate:   bookingDate,
-		RedirectUrl:   response["redirect_url"].(string),
-		BillNoCounter: billNoCounter,
-		Qty:           1,
-		BillNo:        billNo,
-		BillTotal:     price,
-		StatusId:      1,
+
+	response_code <- "200"
+	if response["response_code"] == "00" {
+		payment := entity.Payment{
+			Name:          request.CustName,
+			Phone:         request.Phone,
+			Email:         request.Email,
+			BookingDate:   bookingDate,
+			RedirectUrl:   response["redirect_url"].(string),
+			BillNoCounter: billNoCounter,
+			Qty:           1,
+			BillNo:        billNo,
+			BillTotal:     price,
+			StatusId:      1,
+		}
+		err = paymentService.PaymentRepository.Store(tx, &payment)
+		response_code <- "400"
 	}
-	err = paymentService.PaymentRepository.Store(tx, &payment)
+
 	if err != nil {
 		exception.PanicIfNeeded(err)
 	}
 	tx.Commit()
-	return "200", response
+	return <-response_code, response
 }
