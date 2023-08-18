@@ -15,7 +15,6 @@ func (validationError ValidationError) Error() string {
 type ErrorMessage struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
-	Group   string `json:"group"`
 }
 
 func GetErrorMsg(fe validator.FieldError) string {
@@ -36,6 +35,8 @@ func GetErrorMsg(fe validator.FieldError) string {
 		return "max " + fe.Param() + " Kb"
 	case "image_validation":
 		return "Harus Image"
+	case "number":
+		return "harus numeric"
 	}
 	return "Unknown error"
 }

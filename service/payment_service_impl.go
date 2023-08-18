@@ -2,7 +2,6 @@ package service
 
 import (
 	"ANTRIQUE/payment/entity"
-	"ANTRIQUE/payment/exception"
 	"ANTRIQUE/payment/helper"
 	"ANTRIQUE/payment/model"
 	"ANTRIQUE/payment/repository"
@@ -117,12 +116,11 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 			BillTotal:     price,
 			StatusId:      1,
 		}
-		err = paymentService.PaymentRepository.Store(tx, &payment)
-		response_code <- "400"
+		paymentService.PaymentRepository.Store(tx, &payment)
 	}
 
-	if err != nil {
-		exception.PanicIfNeeded(err)
+	if response["response_code"] != "00" {
+		response_code <- "400"
 	}
 	tx.Commit()
 	return <-response_code, response
