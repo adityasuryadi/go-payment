@@ -18,9 +18,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewPaymentService(repository *repository.PaymentRepository, db *gorm.DB) PaymentService {
+func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB) PaymentService {
 	return &PaymentServiceImpl{
-		PaymentRepository: *repository,
+		PaymentRepository: repository,
 		db:                db,
 	}
 }

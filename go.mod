@@ -10,6 +10,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.15.0 // indirect
 	github.com/go-resty/resty/v2 v2.7.0 // indirect
+	github.com/google/wire v0.5.0 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	golang.org/x/net v0.9.0 // indirect

@@ -12,9 +12,9 @@ type PaymentController struct {
 	PaymentService service.PaymentService
 }
 
-func NewPaymentController(paymentService *service.PaymentService) PaymentController {
+func NewPaymentController(paymentService service.PaymentService) PaymentController {
 	return PaymentController{
-		PaymentService: *paymentService,
+		PaymentService: paymentService,
 	}
 }
 
