@@ -30,6 +30,47 @@ type PaymentServiceImpl struct {
 	db                *gorm.DB
 }
 
+// UpdatePayment implements PaymentService
+func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFaspayRequest) (string, interface{}) {
+
+	billNo := request.BillNo
+	payment, err := paymentService.PaymentRepository.FindPaymentByBillNo(billNo)
+	merchantId := os.Getenv("FASPAY_MERCHANT_ID")
+	if err != nil {
+		return "404", nil
+	}
+
+	if payment.Signature != request.Signature {
+		return "400", nil
+	}
+
+	paymentStatus, _ := strconv.Atoi(request.PaymentStatusCode)
+	paymentChannelUid, _ := strconv.Atoi(request.PaymentChannelUid)
+
+	payment.StatusId = paymentStatus
+	payment.TrxId = request.TrxId
+	payment.PaymentChannel = request.PaymentChannel
+	payment.PaymentChannelUid = paymentChannelUid
+	err = paymentService.PaymentRepository.Update(payment)
+
+	if err != nil {
+		return "500", err
+	}
+
+	response := model.FaspayNotifResponse{
+		Response:     request.Request,
+		TrxId:        payment.TrxId,
+		MerchantId:   merchantId,
+		Merchant:     request.Merchant,
+		BillNo:       payment.BillNo,
+		ResponseCode: "00",
+		ResponseDesc: "Success",
+		ResponseDate: helper.GetNowStringFormat(),
+	}
+
+	return "200", response
+}
+
 // CreatePayment implements PaymentService
 func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaymentRequest) (string, interface{}) {
 	tx := paymentService.db.Begin()
@@ -116,6 +157,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 			BillNo:        billNo,
 			BillTotal:     price,
 			StatusId:      1,
+			Signature:     string(fmt.Sprintf("%x", signature)),
 		}
 		err = paymentService.PaymentRepository.Store(tx, &payment)
 		if err != nil {

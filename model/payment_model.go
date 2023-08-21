@@ -44,3 +44,32 @@ type Item struct {
 	Qty     int     `json:"qty"`
 	Amount  float64 `json:"amount"`
 }
+
+type CallbackFaspayRequest struct {
+	Request           string `json:"request"`
+	TrxId             string `json:"trx_id"`
+	Merchant          string `json:"merchant"`
+	MerchantId        string `json:"merchant_id"`
+	BillNo            string `json:"bill_no"`
+	PaymentReff       string `json:"payment_reff"`
+	PaymentDate       string `json:"payment_date"`
+	PaymentStatusCode string `json:"payment_status_code"`
+	PaymentStatusDesc string `json:"payment_status_desc"`
+	BillTotal         string `json:"bill_total"`
+	PaymentTotal      string `json:"payment_total"`
+	PaymentChannelUid string `json:"payment_channel_uid"`
+	PaymentChannel    string `json:"payment_channel"`
+	Amount            string `json:"amount"`
+	Signature         string `json:"signature"`
+}
+
+type FaspayNotifResponse struct {
+	Response     string `json:"response"`
+	TrxId        string `json:"trx_id"`
+	MerchantId   string `json:"merchant_id"`
+	Merchant     string `json:"merchant"`
+	BillNo       string `json:"bill_no"`
+	ResponseCode string `json:"response_code"`
+	ResponseDesc string `json:"response_desc"`
+	ResponseDate string `json:"response_date"`
+}

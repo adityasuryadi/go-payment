@@ -4,6 +4,7 @@ import (
 	"ANTRIQUE/payment/config"
 	"ANTRIQUE/payment/model"
 	"ANTRIQUE/payment/service"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -20,6 +21,7 @@ func NewPaymentController(paymentService service.PaymentService) PaymentControll
 
 func (controller *PaymentController) Route(app *fiber.App) {
 	app.Post("payment", controller.Create)
+	app.Post("callback", controller.CallbackHandle)
 }
 
 func (controller *PaymentController) Create(ctx *fiber.Ctx) error {
@@ -34,4 +36,12 @@ func (controller *PaymentController) Create(ctx *fiber.Ctx) error {
 	code, response := controller.PaymentService.CreatePayment(request)
 
 	return ctx.JSON(model.GetResponse(code, response))
+}
+
+func (controller *PaymentController) CallbackHandle(ctx *fiber.Ctx) error {
+	var request model.CallbackFaspayRequest
+	ctx.BodyParser(&request)
+	code, response := controller.PaymentService.UpdatePayment(request)
+	responseCode, _ := strconv.Atoi(code)
+	return ctx.Status(responseCode).JSON(response)
 }
