@@ -1,9 +1,9 @@
 package controller
 
 import (
-	"ANTRIQUE/payment/config"
-	"ANTRIQUE/payment/model"
-	"ANTRIQUE/payment/service"
+	"payment/config"
+	"payment/model"
+	"payment/service"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"ANTRIQUE/payment/exception"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -19,7 +18,6 @@ func (config *configImpl) Get(key string) string {
 }
 
 func New(filenames ...string) Config {
-	err := godotenv.Load(filenames...)
-	exception.PanicIfNeeded(err)
+	godotenv.Load(filenames...)
 	return &configImpl{}
 }

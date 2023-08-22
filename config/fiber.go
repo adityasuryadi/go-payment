@@ -1,13 +1,13 @@
 package config
 
-import (
-	"ANTRIQUE/payment/exception"
+// import (
+// 	"payment/exception"
 
-	"github.com/gofiber/fiber/v2"
-)
+// 	"github.com/gofiber/fiber/v2"
+// )
 
-func NewFiberConfig() fiber.Config {
-	return fiber.Config{
-		ErrorHandler: exception.ErrorHandler,
-	}
-}
+// func NewFiberConfig() fiber.Config {
+// 	return fiber.Config{
+// 		ErrorHandler: exception.ErrorHandler,
+// 	}
+// }

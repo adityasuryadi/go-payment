@@ -1,7 +1,7 @@
 package config
 
 import (
-	"ANTRIQUE/payment/exception"
+	"payment/exception"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

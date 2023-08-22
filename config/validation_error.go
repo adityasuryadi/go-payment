@@ -23,6 +23,8 @@ func GetErrorMsg(fe validator.FieldError) string {
 		return "field tidak boleh kosong"
 	case "lte":
 		return "harus lebih kecil dari " + fe.Param()
+	case "gtenow":
+		return "harus lebih besar dari tanggal hari ini"
 	case "gte":
 		return "harus lebih besar dari " + fe.Param()
 	case "email":

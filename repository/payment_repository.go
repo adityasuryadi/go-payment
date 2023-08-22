@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"ANTRIQUE/payment/entity"
+	"payment/entity"
 
 	"gorm.io/gorm"
 )

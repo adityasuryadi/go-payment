@@ -3,6 +3,7 @@ package config
 import (
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -21,6 +22,17 @@ func NewValidation() Validation {
 			return ""
 		}
 		return name
+	})
+
+	// validasi gte than now
+	validate.RegisterValidation("gtenow", func(fl validator.FieldLevel) bool {
+		bookingDate, _ := time.Parse("2006-01-02", fl.Field().String())
+		now := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.UTC)
+		diff := bookingDate.Sub(now)
+		if diff >= 0 {
+			return true
+		}
+		return false
 	})
 
 	return &ValidationImpl{

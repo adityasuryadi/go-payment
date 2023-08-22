@@ -1,16 +1,15 @@
 package service
 
 import (
-	"ANTRIQUE/payment/config"
-	"ANTRIQUE/payment/entity"
-	"ANTRIQUE/payment/helper"
-	"ANTRIQUE/payment/model"
-	"ANTRIQUE/payment/repository"
 	"crypto/md5"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"os"
+	"payment/entity"
+	"payment/helper"
+	"payment/model"
+	"payment/repository"
 	"strconv"
 	"time"
 
@@ -163,7 +162,6 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 		if err != nil {
 			response_code <- "500"
 			response = nil
-			config.WriteLog(err)
 		}
 	}
 

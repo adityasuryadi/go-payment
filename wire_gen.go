@@ -7,14 +7,14 @@
 package main
 
 import (
-	"ANTRIQUE/payment/config"
-	"ANTRIQUE/payment/controller"
-	"ANTRIQUE/payment/exception"
-	"ANTRIQUE/payment/repository"
-	"ANTRIQUE/payment/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/google/wire"
+	"payment/config"
+	"payment/controller"
+	"payment/exception"
+	"payment/repository"
+	"payment/service"
 )
 
 // Injectors from injector.go:

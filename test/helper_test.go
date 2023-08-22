@@ -1,10 +1,10 @@
 package test
 
 import (
-	"ANTRIQUE/payment/config"
-	"ANTRIQUE/payment/entity"
 	"errors"
 	"fmt"
+	"payment/config"
+	"payment/entity"
 	"testing"
 	"time"
 
