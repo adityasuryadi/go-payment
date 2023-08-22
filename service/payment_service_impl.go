@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"payment/entity"
 	"payment/helper"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/natefinch/lumberjack"
 	"gorm.io/gorm"
 )
 
@@ -35,6 +37,17 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 	billNo := request.BillNo
 	payment, err := paymentService.PaymentRepository.FindPaymentByBillNo(billNo)
 	merchantId := os.Getenv("FASPAY_MERCHANT_ID")
+
+	// log callback
+	log.SetOutput(&lumberjack.Logger{
+		Filename:   "./var/log/faspaycallback.log",
+		MaxSize:    500, // megabytes
+		MaxBackups: 3,
+		MaxAge:     1,    //days
+		Compress:   true, // disabled by default
+	})
+	log.Print(request)
+
 	if err != nil {
 		return "404", nil
 	}
