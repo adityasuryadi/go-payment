@@ -30,12 +30,12 @@ func (controller *PaymentController) Create(ctx *fiber.Ctx) error {
 	valid := config.NewValidation()
 	errValidation := valid.ValidateRequest(request)
 	if errValidation != nil {
-		return ctx.JSON(model.GetResponse("400", errValidation))
+		return ctx.Status(400).JSON(model.GetResponse("400", errValidation))
 	}
 
 	code, response := controller.PaymentService.CreatePayment(request)
-
-	return ctx.JSON(model.GetResponse(code, response))
+	responseCode, _ := strconv.Atoi(code)
+	return ctx.Status(responseCode).JSON(model.GetResponse(code, response))
 }
 
 func (controller *PaymentController) CallbackHandle(ctx *fiber.Ctx) error {
