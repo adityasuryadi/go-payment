@@ -50,11 +50,11 @@ func TestFindPaymentNotFound(t *testing.T) {
 }
 
 func TestFindPaymentFound(t *testing.T) {
-	paymentRepository.Mock.On("FindPaymentByBillNo", "1").Return(entity.Payment{
+	paymentRepository.Mock.On("FindPaymentByBillNo", "2").Return(entity.Payment{
 		Email: "adit@mail.com",
 	}, nil)
 
-	payment, err := paymentRepository.FindPaymentByBillNo("1")
+	payment, err := paymentRepository.FindPaymentByBillNo("2")
 	assert.NotNil(t, payment)
 	assert.Nil(t, err)
 }

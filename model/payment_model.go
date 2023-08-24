@@ -3,7 +3,7 @@ package model
 type CreatePaymentRequest struct {
 	CustName    string `json:"cust_name" validate:"required"`
 	Email       string `json:"email" validate:"required,email"`
-	Phone       string `json:"phone" validate:"required,number"`
+	Phone       string `json:"phone" validate:"required,number,min=8"`
 	ServiceName string `json:"service_name" validate:"required"`
 	ServiceId   string `json:"service_id" validate:"required"`
 	BookingDate string `json:"booking_date" validate:"required,gtenow"`
