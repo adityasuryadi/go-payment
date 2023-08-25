@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -11,5 +13,9 @@ func main() {
 		return c.SendString("Hello, World!")
 	})
 
-	app.Listen(":5000")
+	app.Use(func(c *fiber.Ctx) error {
+		return c.SendStatus(404) // => 404 "Not Found"
+	})
+
+	log.Fatal(app.Listen(":5000"))
 }

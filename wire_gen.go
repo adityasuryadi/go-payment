@@ -23,7 +23,8 @@ func InitializeApp(filenames ...string) *fiber.App {
 	configConfig := config.New(filenames...)
 	db := config.NewPostgresDB(configConfig)
 	paymentRepository := repository.NewPaymentRepository(db)
-	paymentService := service.NewPaymentService(paymentRepository, db)
+	faspayService := service.NewFaspayService()
+	paymentService := service.NewPaymentService(paymentRepository, db, faspayService)
 	paymentController := controller.NewPaymentController(paymentService)
 	app := NewServer(paymentController)
 	return app
@@ -32,7 +33,7 @@ func InitializeApp(filenames ...string) *fiber.App {
 // injector.go:
 
 var (
-	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, controller.NewPaymentController)
+	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, service.NewFaspayService, controller.NewPaymentController)
 )
 
 func NewServer(paymentController controller.PaymentController) *fiber.App {

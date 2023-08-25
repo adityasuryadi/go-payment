@@ -23,7 +23,8 @@ func Setup() *fiber.App {
 	configApp := config.New(`\.env.test`)
 	db := config.NewPostgresDB(configApp)
 	paymentRepository := repository.NewPaymentRepository(db)
-	paymentService := service.NewPaymentService(paymentRepository, db)
+	faspayService := service.NewFaspayService()
+	paymentService := service.NewPaymentService(paymentRepository, db, faspayService)
 	paymentController := controller.NewPaymentController(paymentService)
 	paymentController.Route(app)
 	return app
