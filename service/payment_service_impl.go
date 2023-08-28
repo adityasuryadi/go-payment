@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/md5"
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -163,10 +164,17 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 	}
 	tx.Commit()
 	return "200", faspayResponse
-	// return "wkwkwk", nil
 }
 
 func (paymentService *PaymentServiceImpl) GenerateBillNo(tx *gorm.DB) (billNo string, billNoCounter int) {
-	billNo, billNoCounter = helper.GenerateBillNo(tx)
+	payment, err := paymentService.PaymentRepository.GetLastPaymentToday(tx)
+	curdate := time.Now().Format("20060102")
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		billNo = fmt.Sprintf("INV-%s%d", curdate, 1)
+		billNoCounter = 1
+	} else {
+		billNoCounter += payment.BillNoCounter + 1
+		billNo = fmt.Sprintf("INV-%s%d", curdate, billNoCounter)
+	}
 	return billNo, billNoCounter
 }

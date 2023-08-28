@@ -3,8 +3,10 @@ package repository
 import (
 	"errors"
 	"payment/entity"
+	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func NewPaymentRepository(database *gorm.DB) PaymentRepository {
@@ -41,4 +43,16 @@ func (repository *PaymentReposirotyImpl) FindPaymentByBillNo(billNo string) (pay
 		return nil, result.Error
 	}
 	return payment, nil
+}
+
+func (repository *PaymentReposirotyImpl) GetLastPaymentToday(tx *gorm.DB) (*entity.Payment, error) {
+	var payment entity.Payment
+	today := time.Now().Format("2006-01-02")
+	result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where(clause.Expr{SQL: "DATE(created_at) = ?", Vars: []interface{}{today}}).
+		Order("bill_no_counter desc").First(&payment)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) || result.Error != nil {
+		return nil, result.Error
+	}
+	return &payment, nil
 }
