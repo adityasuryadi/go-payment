@@ -26,51 +26,9 @@ import (
 
 const projectDirName = "payment"
 
-// LoadEnv loads env vars from .env
-// func LoadEnv() {
-// 	re := regexp.MustCompile(`^(.*` + projectDirName + `)`)
-// 	cwd, _ := os.Getwd()
-// 	rootPath := re.Find([]byte(cwd))
-
-// 	err := godotenv.Load(string(rootPath) + `/.env.test`)
-// 	if err != nil {
-// 		log.WithFields(log.Fields{
-// 			"cause": err,
-// 			"cwd":   cwd,
-// 		}).Fatal("Problem loading .env file")
-
-// 		os.Exit(-1)
-// 	}
-// }
-
-type PaymentRepositoryMock struct {
-	Mock mock.Mock
-}
-
-func (repository *PaymentRepositoryMock) FindPaymentByBillNo(billNo string) (payment *entity.Payment, err error) {
-	arguments := repository.Mock.Called(billNo)
-	if arguments.Get(0) == nil {
-		return nil, errors.New("not found")
-	} else {
-		payment := arguments.Get(0).(entity.Payment)
-		return &payment, nil
-	}
-}
-
-func (repository *PaymentRepositoryMock) Store(tx *gorm.DB, payment *entity.Payment) error {
-	panic("")
-}
-
-func (repository *PaymentRepositoryMock) Update(payment *entity.Payment) error {
-	panic("")
-}
-
-var paymentRepositoryMock = &PaymentRepositoryMock{Mock: mock.Mock{}}
+var paymentRepositoryMock = &mocks.PaymentRepositoryMock{Mock: mock.Mock{}}
 
 var faspayServiceMock = &mocks.FaspayServiceMock{Mock: mock.Mock{}}
-
-// var faspayServiceMock = &mocks.FaspayServiceMock{Mock: mock.Mock{}}
-// var faspayServiceMock = mock
 
 func TestFindPaymentNotFound(t *testing.T) {
 	paymentRepositoryMock.Mock.On("FindPaymentByBillNo", "1").Return(nil, mock.Anything)
@@ -92,27 +50,14 @@ func TestFindPaymentFound(t *testing.T) {
 
 func TestCreatePayment(t *testing.T) {
 	const price = 2000
-	// db, _, err := sqlmock.New()
-	// if err != nil {
-	// 	// t.Fatal("error creating mock database: %v",err)
-	// 	fmt.Println(err)
-	// }
-	// gormDB, err := gorm.Open(postgres.New(postgres.Config{
-	// 	Conn: db,
-	// }), &gorm.Config{})
-	// LoadEnv()
 	configApp := config.New(`\.env.test`)
 	db := config.NewPostgresDB(configApp)
 	paymentRepository := repository.NewPaymentRepository(db)
 	billNo, _ := helper.GenerateBillNo(db)
-	// if err != nil {
-	// 	t.Fatalf("error opening GORM database: %v", err)
-	// }
 
 	merchantId := configApp.Get("FASPAY_MERCHANT_ID")
 	userId := configApp.Get("FASPAY_USER_ID")
 	password := configApp.Get("FASPAY_PASSWORD")
-	// log.Panic(merchantId)
 
 	shaEncrypt := sha1.New()
 	md5Encrypt := md5.New()
@@ -123,7 +68,6 @@ func TestCreatePayment(t *testing.T) {
 	md5Signature := md5Encrypt.Sum(nil)
 
 	shaEncrypt.Write([]byte(string(fmt.Sprintf("%x", md5Signature))))
-	// signature := shaEncrypt.Sum(nil)
 
 	now := time.Now()
 	nowString := now.Format("2006-01-02 15:04:05")
@@ -136,7 +80,6 @@ func TestCreatePayment(t *testing.T) {
 	}
 
 	mockRequestFaspay := model.CreateFaspayPaymentRequest{
-		// MerchantId:  merchantId,
 		BillNo:      billNo,
 		BillDate:    nowString,
 		BillExpired: now.Add(24 * time.Hour).Format("2006-01-02 15:04:05"),
@@ -144,12 +87,10 @@ func TestCreatePayment(t *testing.T) {
 		BillDesc:    "Booking Antrian",
 		CustNo:      request.Phone,
 		CustName:    request.CustName,
-		// ReturnUrl:   configApp.Get("FASPAY_CALLBACK_URL"),
-		Product: request.ServiceName,
-		// Signature:   string(fmt.Sprintf("%x", signature)),
-		Amount: float64(price),
-		Email:  request.Email,
-		Msisdn: request.Phone,
+		Product:     request.ServiceName,
+		Amount:      float64(price),
+		Email:       request.Email,
+		Msisdn:      request.Phone,
 		Item: []model.Item{
 			{
 				Product: "antrian",
@@ -180,8 +121,7 @@ func TestCreatePayment(t *testing.T) {
 func TestUpdatePaymentBillNotFound(t *testing.T) {
 	db, _, err := sqlmock.New()
 	if err != nil {
-		// t.Fatal("error creating mock database: %v",err)
-		fmt.Println(err)
+		fmt.Print(err)
 	}
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{
 		Conn: db,
@@ -215,8 +155,7 @@ func TestUpdatePaymentBillNotFound(t *testing.T) {
 func TestUpdatePaymentSignatureNotMatch(t *testing.T) {
 	db, _, err := sqlmock.New()
 	if err != nil {
-		// t.Fatal("error creating mock database: %v",err)
-		fmt.Println(err)
+		fmt.Print(err)
 	}
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{
 		Conn: db,
@@ -264,4 +203,44 @@ func TestUpdatePaymentSignatureNotMatch(t *testing.T) {
 	errCode, response := paymentService.UpdatePayment(request)
 	assert.Equal(t, errCode, "400")
 	assert.Nil(t, response)
+}
+
+func TestGenerateBillNoLastPaymentTodayIsNull(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		fmt.Print(err)
+	}
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{
+		Conn: db,
+	}), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("error opening GORM database: %v", err)
+	}
+	curdate := time.Now().Format("20060102")
+	paymentRepositoryMock.Mock.On("GetLastPaymentToday", gormDB).Return(nil, err)
+	var paymentService = service.NewPaymentService(paymentRepositoryMock, gormDB, faspayServiceMock)
+	billNo, billNoCounter := paymentService.GenerateBillNo(gormDB)
+	resultBillNo := fmt.Sprintf("INV-%s%d", curdate, 1)
+	assert.Equal(t, billNoCounter, 1)
+	assert.Equal(t, billNo, resultBillNo)
+}
+
+func TestGenerateBillNoLastPaymentTodayExist(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		fmt.Print(err)
+	}
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{
+		Conn: db,
+	}), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("error opening GORM database: %v", err)
+	}
+	curdate := time.Now().Format("20060102")
+	paymentRepositoryMock.Mock.On("GetLastPaymentToday", gormDB).Return(entity.Payment{BillNo: fmt.Sprintf("INV-%s%d", curdate, 1), BillNoCounter: 1}, nil)
+	var paymentService = service.NewPaymentService(paymentRepositoryMock, gormDB, faspayServiceMock)
+	billNo, billNoCounter := paymentService.GenerateBillNo(gormDB)
+	resultBillNo := fmt.Sprintf("INV-%s%d", curdate, 2)
+	assert.Equal(t, billNoCounter, 2)
+	assert.Equal(t, billNo, resultBillNo)
 }
