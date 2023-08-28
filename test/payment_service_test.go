@@ -237,7 +237,7 @@ func TestGenerateBillNoLastPaymentTodayExist(t *testing.T) {
 		t.Fatalf("error opening GORM database: %v", err)
 	}
 	curdate := time.Now().Format("20060102")
-	paymentRepositoryMock.Mock.On("GetLastPaymentToday", gormDB).Return(entity.Payment{BillNo: fmt.Sprintf("INV-%s%d", curdate, 1), BillNoCounter: 1}, nil)
+	paymentRepositoryMock.Mock.On("GetLastPaymentToday", gormDB).Return(entity.Payment{BillNo: fmt.Sprintf("INV-%s%d", curdate, 2), BillNoCounter: 2}, nil)
 	var paymentService = service.NewPaymentService(paymentRepositoryMock, gormDB, faspayServiceMock)
 	billNo, billNoCounter := paymentService.GenerateBillNo(gormDB)
 	resultBillNo := fmt.Sprintf("INV-%s%d", curdate, 2)

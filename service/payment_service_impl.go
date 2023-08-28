@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/md5"
 	"crypto/sha1"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/natefinch/lumberjack"
 	"gorm.io/gorm"
 )
@@ -41,6 +43,10 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 	payment, err := paymentService.PaymentRepository.FindPaymentByBillNo(billNo)
 	merchantId := os.Getenv("FASPAY_MERCHANT_ID")
 
+	if err != nil {
+		return "404", payment
+	}
+
 	// log callback
 	log.SetOutput(&lumberjack.Logger{
 		Filename:   "./var/log/faspaycallback.log",
@@ -51,12 +57,61 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 	})
 	log.Print(request)
 
-	if err != nil {
-		return "404", nil
+	if payment.Signature != request.Signature {
+		return "400", "invalid signature"
 	}
 
-	if payment.Signature != request.Signature {
-		return "400", nil
+	// create ticket api
+
+	type RequestGenerateTicket struct {
+		UserId      int    `json:"user_id"`
+		ServiceCode string `json:"string"`
+		QueueName   string `json:"queue_name"`
+		ServiceTime string `json:"service_time"`
+		QueueHp     string `json:"queue_hp"`
+		Note        string `json:"note"`
+	}
+
+	url := os.Getenv("CREATE_TICKET_URL")
+	requestTicket := RequestGenerateTicket{
+		UserId:      64,
+		ServiceCode: "Xg8cZQ",
+		QueueName:   payment.Name,
+		ServiceTime: payment.BookingDate.String(),
+		QueueHp:     payment.Phone,
+		Note:        "Catatan",
+	}
+
+	client := resty.New()
+	resp, err := client.R().
+		SetFormData(map[string]string{
+			"user_id":      "64",
+			"service_code": requestTicket.ServiceCode,
+			"queue_name":   requestTicket.QueueName,
+			"service_time": payment.BookingDate.String(),
+			"note":         "-",
+			"queue_hp":     payment.Phone,
+		}).
+		SetHeader("Accept", "application/json").
+		Post(url)
+
+	if err != nil {
+		return "500", err.Error()
+	}
+
+	responseTicket := make(map[string]interface{})
+	json.Unmarshal(resp.Body(), &responseTicket)
+	if responseTicket["error"] == true {
+		log.SetOutput(&lumberjack.Logger{
+			Filename:   "./var/log/ticket.log",
+			MaxSize:    500, // megabytes
+			MaxBackups: 3,
+			MaxAge:     1,    //days
+			Compress:   true, // disabled by default
+		})
+		responseTicket["trx_id"] = payment.TrxId
+		log.Print(responseTicket)
+		return "400", responseTicket
 	}
 
 	paymentStatus, _ := strconv.Atoi(request.PaymentStatusCode)
@@ -143,6 +198,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 			Name:          request.CustName,
 			Phone:         request.Phone,
 			Email:         request.Email,
+			ServiceId:     request.ServiceId,
 			BookingDate:   bookingDate,
 			RedirectUrl:   faspayResponse.RedirectUrl,
 			BillNoCounter: billNoCounter,
@@ -153,7 +209,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 			Signature:     string(fmt.Sprintf("%x", signature)),
 		}
 
-		paymentService.PaymentRepository.Store(tx, &payment)
+		err := paymentService.PaymentRepository.Store(tx, &payment)
 		if err != nil {
 			return "500", err.Error()
 		}

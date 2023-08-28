@@ -26,7 +26,7 @@ func TestFindPaymentByBillNo(t *testing.T) {
 	}
 	rows := sqlmock.NewRows([]string{"id", "name", "phone", "email", "booking_date", "redirect_url", "qty", "bill_no", "bill_total", "status_id", "bill_no_counter", "trx_id", "payment_channel_uid", "payment_channel", "siganture", "created_at", "updated_at"}).
 		AddRow(uuid.MustParse("33a61a3d-88e8-484d-8061-3db0bff92e3a"), "name 1", "081234567", "adit@mail.com", "2023-01-01", "http://antrique.com", 1, "INV-2023080811", 2000, 0, 11, "235476234572", 402, "Permata Bank", "286587236578235", time.Now(), time.Now())
-	query := "SELECT * FROM payments where bill_no = \\? ORDER BY 'payments'.'id' LIMIT 1 "
+	query := `SELECT * FROM "payments" WHERE bill_no = $1 ORDER BY "payments"."id" LIMIT 1`
 	mock.ExpectQuery(query).WillReturnRows(rows)
 	repo := repository.NewPaymentRepository(gormDB)
 	payment, err := repo.FindPaymentByBillNo("INV-2023080811")
