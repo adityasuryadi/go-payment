@@ -6,6 +6,7 @@ CREATE TABLE "payments" (
     booking_date DATE NOT NULL,
     qty INT NOT NULL,
     service_id INT NOT NULL,
+    service_code VARCHAR (50) NOT NULL,
     redirect_url TEXT,
     bill_no_counter INT, 
     bill_no VARCHAR (255) NOT NULL,

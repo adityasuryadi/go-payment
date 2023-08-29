@@ -14,6 +14,7 @@ type Payment struct {
 	Email             string    `gorm:"column:email"`
 	BookingDate       time.Time `gorm:"column:booking_date"`
 	RedirectUrl       string    `gorm:"column:redirect_url"`
+	ServiceCode       string    `gorm:"column:service_code"`
 	Qty               int64     `gorm:"column:qty"`
 	ServiceId         string    `gorm:"column:service_id"`
 	BillNo            string    `gorm:"column:bill_no"`

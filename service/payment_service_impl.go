@@ -157,7 +157,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 		BillNo:      billNo,
 		BillDate:    nowString,
 		BillExpired: now.Add(24 * time.Hour).Format("2006-01-02 15:04:05"),
-		BillDesc:    "Booking Antrian",
+		BillDesc:    "Booking Antrian " + request.ServiceName,
 		BillTotal:   float64(price),
 		CustNo:      request.Phone,
 		CustName:    request.CustName,
@@ -169,7 +169,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 		Email:       request.Email,
 		Item: []model.Item{
 			{
-				Product: "antrian",
+				Product: request.ServiceName,
 				Qty:     1,
 				Amount:  float64(price),
 			},
@@ -207,6 +207,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 			BillTotal:     price,
 			StatusId:      1,
 			Signature:     string(fmt.Sprintf("%x", signature)),
+			ServiceCode:   request.ServiceCode,
 		}
 
 		err := paymentService.PaymentRepository.Store(tx, &payment)
