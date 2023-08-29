@@ -8,6 +8,7 @@ CREATE TABLE "payments" (
     service_id INT NOT NULL,
     service_code VARCHAR (50) NOT NULL,
     redirect_url TEXT,
+    user_id int NOT NULL,
     bill_no_counter INT, 
     bill_no VARCHAR (255) NOT NULL,
     bill_total FLOAT NOT NULL,
