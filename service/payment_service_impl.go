@@ -22,11 +22,12 @@ import (
 
 const price float64 = 2000
 
-func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService) PaymentService {
+func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository) PaymentService {
 	return &PaymentServiceImpl{
 		PaymentRepository: repository,
 		FaspayService:     faspayService,
 		db:                db,
+		PointRepository:   pointRepository,
 	}
 }
 
@@ -34,6 +35,7 @@ type PaymentServiceImpl struct {
 	PaymentRepository repository.PaymentRepository
 	db                *gorm.DB
 	FaspayService     FaspayService
+	PointRepository   repository.PointRespository
 }
 
 // UpdatePayment implements PaymentService
@@ -45,6 +47,10 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 
 	if err != nil {
 		return "404", payment
+	}
+
+	if payment.StatusId == 2 {
+		return "400", "has already pay"
 	}
 
 	// log callback
@@ -99,6 +105,15 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 		return "500", err.Error()
 	}
 
+	paymentStatus, _ := strconv.Atoi(request.PaymentStatusCode)
+	paymentChannelUid, _ := strconv.Atoi(request.PaymentChannelUid)
+
+	payment.StatusId = paymentStatus
+	payment.TrxId = request.TrxId
+	payment.PaymentChannel = request.PaymentChannel
+	payment.PaymentChannelUid = paymentChannelUid
+	err = paymentService.PaymentRepository.Update(payment)
+
 	responseTicket := make(map[string]interface{})
 	json.Unmarshal(resp.Body(), &responseTicket)
 	if responseTicket["error"] == true {
@@ -111,17 +126,32 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 		})
 		responseTicket["trx_id"] = payment.TrxId
 		log.Print(responseTicket)
-		return "400", responseTicket
+
+		// restore payment to point
+		userPoint, err := paymentService.PointRepository.FindPointByUserId(30)
+		if err != nil && !!errors.Is(err, gorm.ErrRecordNotFound) {
+			return "500", err.Error()
+		}
+		fmt.Println(userPoint)
+		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+			entityPoint := &entity.Point{
+				UserId: 30,
+				Point:  payment.BillTotal,
+			}
+			_, err := paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+				UserId: 30,
+				Point:  entityPoint.Point + payment.BillTotal,
+			})
+			if err != nil {
+				return "500", err.Error()
+			}
+		}
+		paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+			UserId: 30,
+			Point:  userPoint.Point + payment.BillTotal,
+		})
+		return "400", responseTicket["error_msg"]
 	}
-
-	paymentStatus, _ := strconv.Atoi(request.PaymentStatusCode)
-	paymentChannelUid, _ := strconv.Atoi(request.PaymentChannelUid)
-
-	payment.StatusId = paymentStatus
-	payment.TrxId = request.TrxId
-	payment.PaymentChannel = request.PaymentChannel
-	payment.PaymentChannelUid = paymentChannelUid
-	err = paymentService.PaymentRepository.Update(payment)
 
 	if err != nil {
 		return "500", err

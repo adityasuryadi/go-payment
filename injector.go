@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, service.NewFaspayService, controller.NewPaymentController)
+	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, service.NewFaspayService, controller.NewPaymentController, repository.NewPointRepository)
 )
 
 func InitializeApp(filenames ...string) *fiber.App {
