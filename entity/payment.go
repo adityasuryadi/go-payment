@@ -25,6 +25,7 @@ type Payment struct {
 	PaymentChannelUid int       `gorm:"column:payment_channel_uid"`
 	PaymentChannel    string    `gorm:"column:payment_channel"`
 	Signature         string    `gorm:"column:signature"`
+	SnapToken         string    `gorm:"column:snap_token"`
 	CreatedAt         time.Time `gorm:"column:created_at"`
 	UpdatedAt         time.Time `gorm:"column:updated_at"`
 }

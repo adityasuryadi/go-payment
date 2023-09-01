@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"payment/config"
 	"payment/entity"
 	"payment/helper"
 	"payment/model"
@@ -16,18 +17,21 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/midtrans/midtrans-go"
+	"github.com/midtrans/midtrans-go/snap"
 	"github.com/natefinch/lumberjack"
 	"gorm.io/gorm"
 )
 
 const price float64 = 2000
 
-func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository) PaymentService {
+func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository, midtransPayment config.MidtransPayment) PaymentService {
 	return &PaymentServiceImpl{
 		PaymentRepository: repository,
-		FaspayService:     faspayService,
 		db:                db,
+		FaspayService:     faspayService,
 		PointRepository:   pointRepository,
+		MidtransPayment:   midtransPayment,
 	}
 }
 
@@ -36,6 +40,7 @@ type PaymentServiceImpl struct {
 	db                *gorm.DB
 	FaspayService     FaspayService
 	PointRepository   repository.PointRespository
+	MidtransPayment   config.MidtransPayment
 }
 
 // UpdatePayment implements PaymentService
@@ -81,7 +86,7 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 	url := os.Getenv("CREATE_TICKET_URL")
 	requestTicket := RequestGenerateTicket{
 		UserId:      64,
-		ServiceCode: "Xg8cZQ",
+		ServiceCode: "SPnjWy",
 		QueueName:   payment.Name,
 		ServiceTime: payment.BookingDate.String(),
 		QueueHp:     payment.Phone,
@@ -114,6 +119,10 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 	payment.PaymentChannelUid = paymentChannelUid
 	err = paymentService.PaymentRepository.Update(payment)
 
+	if err != nil {
+		return "500", err
+	}
+
 	responseTicket := make(map[string]interface{})
 	json.Unmarshal(resp.Body(), &responseTicket)
 	if responseTicket["error"] == true {
@@ -132,7 +141,6 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 		if err != nil && !!errors.Is(err, gorm.ErrRecordNotFound) {
 			return "500", err.Error()
 		}
-		fmt.Println(userPoint)
 		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 			entityPoint := &entity.Point{
 				UserId: 30,
@@ -151,10 +159,6 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 			Point:  userPoint.Point + payment.BillTotal,
 		})
 		return "400", responseTicket["error_msg"]
-	}
-
-	if err != nil {
-		return "500", err
 	}
 
 	response := model.FaspayNotifResponse{
@@ -264,4 +268,102 @@ func (paymentService *PaymentServiceImpl) GenerateBillNo(tx *gorm.DB) (billNo st
 		billNo = fmt.Sprintf("INV-%s%d", curdate, billNoCounter)
 	}
 	return billNo, billNoCounter
+}
+
+func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.CreatePaymentRequest) (string, interface{}) {
+	tx := paymentService.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	billNo, billNoCounter := paymentService.GenerateBillNo(tx)
+	bookingDate, _ := time.Parse("2006-01-02", request.BookingDate)
+
+	custAddress := &midtrans.CustomerAddress{
+		FName:       request.CustName,
+		LName:       "",
+		Phone:       request.Phone,
+		Address:     "",
+		City:        "",
+		Postcode:    "",
+		CountryCode: "IDN",
+	}
+
+	fmt.Println("service_name", request.ServiceName)
+	// Initiate Snap Request
+	snapReq := &snap.Request{
+		TransactionDetails: midtrans.TransactionDetails{
+			OrderID:  billNo,
+			GrossAmt: int64(price),
+		},
+		CreditCard: &snap.CreditCardDetails{
+			Secure: true,
+		},
+		CustomerDetail: &midtrans.CustomerDetails{
+			FName:    request.CustName,
+			LName:    "",
+			Email:    request.Email,
+			Phone:    request.Phone,
+			BillAddr: custAddress,
+			ShipAddr: custAddress,
+		},
+		EnabledPayments: snap.AllSnapPaymentType,
+		Items: &[]midtrans.ItemDetails{
+			{
+				ID:    request.ServiceCode,
+				Price: int64(price),
+				Qty:   1,
+				Name:  request.ServiceName,
+			},
+		},
+	}
+	token, err := paymentService.MidtransPayment.CreateTokenTransactionWithGateway(snapReq)
+	if err != nil {
+		return "400", err.Error()
+	}
+	payment := entity.Payment{
+		Name:          request.CustName,
+		Phone:         request.Phone,
+		Email:         request.Email,
+		ServiceId:     request.ServiceId,
+		BookingDate:   bookingDate,
+		RedirectUrl:   "",
+		BillNoCounter: billNoCounter,
+		Qty:           1,
+		BillNo:        billNo,
+		BillTotal:     price,
+		StatusId:      1,
+		ServiceCode:   request.ServiceCode,
+		SnapToken:     token,
+	}
+
+	err = paymentService.PaymentRepository.Store(tx, &payment)
+	if err != nil {
+		return "500", err.Error()
+	}
+	tx.Commit()
+
+	return "200", token
+}
+
+func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.MidtransNotificationRequest) (string, interface{}) {
+	status, err := paymentService.MidtransPayment.Notification(request)
+	if err != nil && errors.Is(err, err.(*midtrans.Error)) {
+		return "400", err.(*midtrans.Error).GetMessage()
+	}
+	payment, err := paymentService.PaymentRepository.FindPaymentByBillNo(request.OrderId)
+	if err != nil {
+		return "404", payment
+	}
+
+	payment.StatusId = status
+
+	err = paymentService.PaymentRepository.Update(payment)
+
+	if err != nil {
+		return "500", err
+	}
+	return "200", payment
 }

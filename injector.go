@@ -23,6 +23,7 @@ func InitializeApp(filenames ...string) *fiber.App {
 	wire.Build(
 		config.New,
 		config.NewPostgresDB,
+		config.NewMidtransPayment,
 		paymentSet,
 		NewServer,
 	)

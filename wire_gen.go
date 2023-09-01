@@ -25,7 +25,8 @@ func InitializeApp(filenames ...string) *fiber.App {
 	paymentRepository := repository.NewPaymentRepository(db)
 	faspayService := service.NewFaspayService()
 	pointRespository := repository.NewPointRepository(db)
-	paymentService := service.NewPaymentService(paymentRepository, db, faspayService, pointRespository)
+	midtransPayment := config.NewMidtransPayment(configConfig)
+	paymentService := service.NewPaymentService(paymentRepository, db, faspayService, pointRespository, midtransPayment)
 	paymentController := controller.NewPaymentController(paymentService)
 	app := NewServer(paymentController)
 	return app
