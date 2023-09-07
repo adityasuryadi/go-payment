@@ -37,16 +37,16 @@ func (m *MidtransPaymentImpl) CreateTokenTransactionWithGateway(request *snap.Re
 }
 
 /*
-   @param array
-   @return void
-   function untuk update setelah selesai pembayaran dan callback dari midtrans
-   status pembayaran
-   0 = belum proses
-   1 = dalam proses/pending
-   2 = sukses
-   3 = gagal
-   4 = expired
-   5 = cancel
+@param array
+@return void
+function untuk update setelah selesai pembayaran dan callback dari midtrans
+status pembayaran
+0 = belum proses
+1 = dalam proses/pending
+2 = sukses
+3 = gagal
+4 = expired
+5 = cancel
 */
 func (m *MidtransPaymentImpl) Notification(request model.MidtransNotificationRequest) (int, error) {
 	status := make(chan int, 1)

@@ -33,10 +33,9 @@ func InitializeApp(filenames ...string) *fiber.App {
 func NewServer(paymentController controller.PaymentController) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: exception.ErrorHandler})
 	app.Use(cors.New(cors.Config{
-		AllowHeaders:     "*",
-		AllowOrigins:     "*",
-		AllowCredentials: true,
-		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		AllowHeaders: "*",
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 	}))
 	paymentController.Route(app)
 	return app

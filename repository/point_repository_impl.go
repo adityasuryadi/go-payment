@@ -19,7 +19,7 @@ type PointRespositoryImpl struct {
 // FindPointByUserId implements PointRespository
 func (repository *PointRespositoryImpl) FindPointByUserId(user_id int) (*entity.Point, error) {
 	var point *entity.Point
-	err := repository.db.Debug().Where("user_id = ?", user_id).First(&point).Error
+	err := repository.db.Where("user_id = ?", user_id).First(&point).Error
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (repository *PointRespositoryImpl) FindPointByUserId(user_id int) (*entity.
 
 // InsertOrUpdate implements PointRespository
 func (repository *PointRespositoryImpl) InsertOrUpdate(point *entity.Point) (*entity.Point, error) {
-	err := repository.db.Where(entity.Point{UserId: point.UserId}).Assign(entity.Point{Point: point.Point}).FirstOrCreate(&point).Error
+	err := repository.db.Debug().Where(entity.Point{UserId: point.UserId}).Assign(entity.Point{Point: point.Point}).FirstOrCreate(&point).Error
 	if err != nil {
 		return nil, err
 	}

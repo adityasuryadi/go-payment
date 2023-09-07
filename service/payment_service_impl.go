@@ -13,10 +13,10 @@ import (
 	"payment/helper"
 	"payment/model"
 	"payment/repository"
+	service "payment/service/external"
 	"strconv"
 	"time"
 
-	"github.com/go-resty/resty/v2"
 	"github.com/midtrans/midtrans-go"
 	"github.com/midtrans/midtrans-go/snap"
 	"github.com/natefinch/lumberjack"
@@ -54,9 +54,9 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 		return "404", payment
 	}
 
-	if payment.StatusId == 2 {
-		return "400", "has already pay"
-	}
+	// if payment.StatusId == 2 {
+	// 	return "400", "has already pay"
+	// }
 
 	// log callback
 	log.SetOutput(&lumberjack.Logger{
@@ -74,42 +74,6 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 
 	// create ticket api
 
-	type RequestGenerateTicket struct {
-		UserId      int    `json:"user_id"`
-		ServiceCode string `json:"string"`
-		QueueName   string `json:"queue_name"`
-		ServiceTime string `json:"service_time"`
-		QueueHp     string `json:"queue_hp"`
-		Note        string `json:"note"`
-	}
-
-	url := os.Getenv("CREATE_TICKET_URL")
-	requestTicket := RequestGenerateTicket{
-		UserId:      64,
-		ServiceCode: "SPnjWy",
-		QueueName:   payment.Name,
-		ServiceTime: payment.BookingDate.String(),
-		QueueHp:     payment.Phone,
-		Note:        "Catatan",
-	}
-
-	client := resty.New()
-	resp, err := client.R().
-		SetFormData(map[string]string{
-			"user_id":      "64",
-			"service_code": requestTicket.ServiceCode,
-			"queue_name":   requestTicket.QueueName,
-			"service_time": payment.BookingDate.String(),
-			"note":         "-",
-			"queue_hp":     payment.Phone,
-		}).
-		SetHeader("Accept", "application/json").
-		Post(url)
-
-	if err != nil {
-		return "500", err.Error()
-	}
-
 	paymentStatus, _ := strconv.Atoi(request.PaymentStatusCode)
 	paymentChannelUid, _ := strconv.Atoi(request.PaymentChannelUid)
 
@@ -123,8 +87,28 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 		return "500", err
 	}
 
+	// create ticket api
+
+	queueService := new(service.QueueServiceImpl)
+
+	requestTicket := model.GenerateTicketRequest{
+		UserId:      64,
+		ServiceCode: "SPnjWy",
+		QueueName:   payment.Name,
+		ServiceTime: payment.BookingDate.String(),
+		QueueHp:     payment.Phone,
+		Note:        "Catatan",
+	}
+
+	resp, err := queueService.CreateTicket(requestTicket)
+
+	if err != nil {
+		return "500", err.Error()
+	}
+
 	responseTicket := make(map[string]interface{})
 	json.Unmarshal(resp.Body(), &responseTicket)
+
 	if responseTicket["error"] == true {
 		log.SetOutput(&lumberjack.Logger{
 			Filename:   "./var/log/ticket.log",
@@ -134,30 +118,33 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 			Compress:   true, // disabled by default
 		})
 		responseTicket["trx_id"] = payment.TrxId
-		log.Print(responseTicket)
 
-		// restore payment to point
-		userPoint, err := paymentService.PointRepository.FindPointByUserId(30)
-		if err != nil && !!errors.Is(err, gorm.ErrRecordNotFound) {
+		// restore payment to point if call api ticket failed
+		userPoint, err := paymentService.PointRepository.FindPointByUserId(requestTicket.UserId)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return "500", err.Error()
 		}
+
 		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
-			entityPoint := &entity.Point{
-				UserId: 30,
-				Point:  payment.BillTotal,
-			}
 			_, err := paymentService.PointRepository.InsertOrUpdate(&entity.Point{
-				UserId: 30,
-				Point:  entityPoint.Point + payment.BillTotal,
+				UserId: requestTicket.UserId,
+				Point:  payment.BillTotal,
+			})
+
+			if err != nil {
+				return "500", err.Error()
+			}
+		}
+
+		if err == nil {
+			paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+				UserId: requestTicket.UserId,
+				Point:  userPoint.Point + payment.BillTotal,
 			})
 			if err != nil {
 				return "500", err.Error()
 			}
 		}
-		paymentService.PointRepository.InsertOrUpdate(&entity.Point{
-			UserId: 30,
-			Point:  userPoint.Point + payment.BillTotal,
-		})
 		return "400", responseTicket["error_msg"]
 	}
 
@@ -318,6 +305,10 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 				Name:  request.ServiceName,
 			},
 		},
+		Gopay: &snap.GopayDetails{
+			EnableCallback: true,
+			CallbackUrl:    "https://antrique.com/payment-native/getQueueByOrder.php",
+		},
 	}
 	token, err := paymentService.MidtransPayment.CreateTokenTransactionWithGateway(snapReq)
 	if err != nil {
@@ -359,11 +350,72 @@ func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.Midtran
 	}
 
 	payment.StatusId = status
+	payment.Signature = request.SigantureKey
+	payment.PaymentChannel = request.PaymentType
 
 	err = paymentService.PaymentRepository.Update(payment)
+	if err != nil {
+		return "500", err.Error()
+	}
+	// create ticket api
+
+	queueService := new(service.QueueServiceImpl)
+
+	requestTicket := model.GenerateTicketRequest{
+		UserId:      64,
+		ServiceCode: "SPnjWy",
+		QueueName:   payment.Name,
+		ServiceTime: payment.BookingDate.String(),
+		QueueHp:     payment.Phone,
+		Note:        "Catatan",
+	}
+
+	resp, err := queueService.CreateTicket(requestTicket)
 
 	if err != nil {
-		return "500", err
+		return "500", err.Error()
+	}
+
+	responseTicket := make(map[string]interface{})
+	json.Unmarshal(resp.Body(), &responseTicket)
+
+	if responseTicket["error"] == true {
+		log.SetOutput(&lumberjack.Logger{
+			Filename:   "./var/log/ticket.log",
+			MaxSize:    500, // megabytes
+			MaxBackups: 3,
+			MaxAge:     1,    //days
+			Compress:   true, // disabled by default
+		})
+		responseTicket["trx_id"] = payment.TrxId
+
+		// restore payment to point if call api ticket failed
+		userPoint, err := paymentService.PointRepository.FindPointByUserId(requestTicket.UserId)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return "500", err.Error()
+		}
+
+		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+			_, err := paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+				UserId: requestTicket.UserId,
+				Point:  payment.BillTotal,
+			})
+
+			if err != nil {
+				return "500", err.Error()
+			}
+		}
+
+		if err == nil {
+			paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+				UserId: requestTicket.UserId,
+				Point:  userPoint.Point + payment.BillTotal,
+			})
+			if err != nil {
+				return "500", err.Error()
+			}
+		}
+		return "400", responseTicket["error_msg"]
 	}
 	return "200", payment
 }

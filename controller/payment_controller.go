@@ -52,9 +52,16 @@ func (controller *PaymentController) CallbackHandle(ctx *fiber.Ctx) error {
 func (controller *PaymentController) createTokenTransactionWithGateway(ctx *fiber.Ctx) error {
 	var request model.CreatePaymentRequest
 	ctx.BodyParser(&request)
+
+	valid := config.NewValidation()
+	errValidation := valid.ValidateRequest(request)
+	if errValidation != nil {
+		return ctx.Status(400).JSON(model.GetResponse("400", errValidation))
+	}
+
 	code, resp := controller.PaymentService.GenerateSnapToken(request)
 	responseCode, _ := strconv.Atoi(code)
-	return ctx.Status(responseCode).JSON(model.GetResponse(code, resp))
+	return ctx.Status(responseCode).JSON(model.GetResponse(code, model.SnapResponse{Token: resp.(string)}))
 }
 
 func (controller *PaymentController) CallbackMidtrans(ctx *fiber.Ctx) error {
