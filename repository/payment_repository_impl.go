@@ -21,7 +21,7 @@ type PaymentReposirotyImpl struct {
 
 // Update implements PaymentRepository
 func (repository *PaymentReposirotyImpl) Update(payment *entity.Payment) error {
-	err := repository.db.Save(&payment).Error
+	err := repository.db.Select("id", "bookingId", "userId", "price", "status", "signature", "billNo", "bill_no_counter", "createdAt").Save(&payment).Error
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func (repository *PaymentReposirotyImpl) Update(payment *entity.Payment) error {
 
 // Store implements PaymentRepository
 func (repository *PaymentReposirotyImpl) Store(tx *gorm.DB, payment *entity.Payment) error {
-	result := tx.Create(&payment)
+	result := tx.Select("id", "bookingId", "userId", "price", "status", "signature", "billNo", "bill_no_counter", "createdAt").Create(&payment)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -38,7 +38,7 @@ func (repository *PaymentReposirotyImpl) Store(tx *gorm.DB, payment *entity.Paym
 }
 
 func (repository *PaymentReposirotyImpl) FindPaymentByBillNo(billNo string) (payment *entity.Payment, err error) {
-	result := repository.db.Where("bill_no = ?", billNo).First(&payment)
+	result := repository.db.Where("billNo = ?", billNo).First(&payment)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return nil, result.Error
 	}
@@ -49,7 +49,7 @@ func (repository *PaymentReposirotyImpl) GetLastPaymentToday(tx *gorm.DB) (*enti
 	var payment entity.Payment
 	today := time.Now().Format("2006-01-02")
 	result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where(clause.Expr{SQL: "DATE(created_at) = ?", Vars: []interface{}{today}}).
+		Where(clause.Expr{SQL: "DATE(createdAt) = ?", Vars: []interface{}{today}}).
 		Order("bill_no_counter desc").First(&payment)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) || result.Error != nil {
 		return nil, result.Error

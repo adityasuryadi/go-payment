@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/md5"
 	"crypto/sha1"
+	"crypto/sha512"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,13 +26,14 @@ import (
 
 const price float64 = 2000
 
-func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository, midtransPayment config.MidtransPayment) PaymentService {
+func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository, midtransPayment config.MidtransPayment, bookingRepo repository.BookingRepository) PaymentService {
 	return &PaymentServiceImpl{
 		PaymentRepository: repository,
 		db:                db,
 		FaspayService:     faspayService,
 		PointRepository:   pointRepository,
 		MidtransPayment:   midtransPayment,
+		BookingRepository: bookingRepo,
 	}
 }
 
@@ -41,6 +43,7 @@ type PaymentServiceImpl struct {
 	FaspayService     FaspayService
 	PointRepository   repository.PointRespository
 	MidtransPayment   config.MidtransPayment
+	BookingRepository repository.BookingRepository
 }
 
 // UpdatePayment implements PaymentService
@@ -197,6 +200,23 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 		},
 	}
 
+	bookingDate, _ := time.Parse("2006-01-02", request.BookingDate)
+	booking := &entity.Booking{
+		Name:        request.CustName,
+		Phone:       request.Phone,
+		Email:       request.Email,
+		BookingDate: bookingDate,
+		ServiceCode: request.ServiceCode,
+		StatusId:    1,
+		ServiceId:   request.ServiceId,
+	}
+
+	resultBooking, err := paymentService.BookingRepository.Create(booking)
+
+	if err != nil {
+		return "500", err.Error()
+	}
+
 	faspayResponse, err := paymentService.FaspayService.CreatePaymentExpress(requestFaspay)
 	if err != nil {
 		log.Fatal(err)
@@ -213,22 +233,23 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 
 	shaEncrypt.Write([]byte(string(fmt.Sprintf("%x", md5Signature))))
 	signature := shaEncrypt.Sum(nil)
-	bookingDate, _ := time.Parse("2006-01-02", request.BookingDate)
+
 	if faspayResponse.ResponseCode == "00" {
 		payment := entity.Payment{
-			Name:          request.CustName,
-			Phone:         request.Phone,
-			Email:         request.Email,
-			ServiceId:     request.ServiceId,
-			BookingDate:   bookingDate,
-			RedirectUrl:   faspayResponse.RedirectUrl,
+			// Name:          request.CustName,
+			// Phone:         request.Phone,
+			// Email:         request.Email,
+			// ServiceId:     request.ServiceId,
+			// BookingDate:   bookingDate,
+			// RedirectUrl:   faspayResponse.RedirectUrl,
 			BillNoCounter: billNoCounter,
-			Qty:           1,
-			BillNo:        faspayResponse.BillNo,
-			BillTotal:     price,
-			StatusId:      1,
-			Signature:     string(fmt.Sprintf("%x", signature)),
-			ServiceCode:   request.ServiceCode,
+			// Qty:           1,
+			BillNo:    faspayResponse.BillNo,
+			BillTotal: price,
+			StatusId:  1,
+			Signature: string(fmt.Sprintf("%x", signature)),
+			BookingId: resultBooking.Id,
+			// ServiceCode:   request.ServiceCode,
 		}
 
 		err := paymentService.PaymentRepository.Store(tx, &payment)
@@ -278,7 +299,21 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 		CountryCode: "IDN",
 	}
 
-	fmt.Println("service_name", request.ServiceName)
+	booking := &entity.Booking{
+		Name:        request.CustName,
+		Phone:       request.Phone,
+		Email:       request.Email,
+		BookingDate: bookingDate,
+		ServiceCode: request.ServiceCode,
+		StatusId:    1,
+		ServiceId:   request.ServiceId,
+	}
+
+	resultBooking, err := paymentService.BookingRepository.Create(booking)
+
+	if err != nil {
+		return "500", err.Error()
+	}
 	// Initiate Snap Request
 	snapReq := &snap.Request{
 		TransactionDetails: midtrans.TransactionDetails{
@@ -314,20 +349,37 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 	if err != nil {
 		return "400", err.Error()
 	}
+	// payment := entity.Payment{
+	// 	Name:          request.CustName,
+	// 	Phone:         request.Phone,
+	// 	Email:         request.Email,
+	// 	ServiceId:     request.ServiceId,
+	// 	BookingDate:   bookingDate,
+	// 	RedirectUrl:   "",
+	// 	BillNoCounter: billNoCounter,
+	// 	Qty:           1,
+	// 	BillNo:        billNo,
+	// 	BillTotal:     price,
+	// 	StatusId:      1,
+	// 	ServiceCode:   request.ServiceCode,
+	// 	SnapToken:     token,
+	// }
+
 	payment := entity.Payment{
-		Name:          request.CustName,
-		Phone:         request.Phone,
-		Email:         request.Email,
-		ServiceId:     request.ServiceId,
-		BookingDate:   bookingDate,
-		RedirectUrl:   "",
+		// Name:          request.CustName,
+		// Phone:         request.Phone,
+		// Email:         request.Email,
+		// ServiceId:     request.ServiceId,
+		// BookingDate:   bookingDate,
+		// RedirectUrl:   faspayResponse.RedirectUrl,
 		BillNoCounter: billNoCounter,
-		Qty:           1,
-		BillNo:        billNo,
-		BillTotal:     price,
-		StatusId:      1,
-		ServiceCode:   request.ServiceCode,
-		SnapToken:     token,
+		// Qty:           1,
+		BillNo:    billNo,
+		BillTotal: price,
+		StatusId:  1,
+		SnapToken: token,
+		BookingId: resultBooking.Id,
+		// ServiceCode:   request.ServiceCode,
 	}
 
 	err = paymentService.PaymentRepository.Store(tx, &payment)
@@ -344,6 +396,23 @@ func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.Midtran
 	if err != nil && errors.Is(err, err.(*midtrans.Error)) {
 		return "400", err.(*midtrans.Error).GetMessage()
 	}
+
+	// verify signature
+	amount := request.GrossAmount
+	plainSignature := request.OrderId + request.StatusCode + amount + os.Getenv("MIDTRANS_SERVER_KEY")
+	// sha_512 := sha512.New()
+	// sha_512.Write([]byte(plainSignature))
+	signature := sha512.Sum512([]byte(plainSignature))
+
+	if request.SigantureKey != string(fmt.Sprintf("%x", signature)) {
+		return "404", string(fmt.Sprintf("%x", signature))
+	}
+
+	// sha512.Write([]byte(plainSignature))
+	// md5Signature := md5Encrypt.Sum(nil)
+
+	// shaEncrypt.Write([]byte(string(fmt.Sprintf("%x", md5Signature))))
+
 	payment, err := paymentService.PaymentRepository.FindPaymentByBillNo(request.OrderId)
 	if err != nil {
 		return "404", payment

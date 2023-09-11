@@ -16,13 +16,13 @@ import (
 )
 
 var (
-	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, service.NewFaspayService, controller.NewPaymentController, repository.NewPointRepository)
+	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, service.NewFaspayService, controller.NewPaymentController, repository.NewPointRepository, repository.NewBookingRepository)
 )
 
 func InitializeApp(filenames ...string) *fiber.App {
 	wire.Build(
 		config.New,
-		config.NewPostgresDB,
+		config.NewMysqlDB,
 		config.NewMidtransPayment,
 		paymentSet,
 		NewServer,

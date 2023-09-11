@@ -21,12 +21,13 @@ import (
 
 func InitializeApp(filenames ...string) *fiber.App {
 	configConfig := config.New(filenames...)
-	db := config.NewPostgresDB(configConfig)
+	db := config.NewMysqlDB(configConfig)
 	paymentRepository := repository.NewPaymentRepository(db)
 	faspayService := service.NewFaspayService()
 	pointRespository := repository.NewPointRepository(db)
 	midtransPayment := config.NewMidtransPayment(configConfig)
-	paymentService := service.NewPaymentService(paymentRepository, db, faspayService, pointRespository, midtransPayment)
+	bookingRepository := repository.NewBookingRepository(db)
+	paymentService := service.NewPaymentService(paymentRepository, db, faspayService, pointRespository, midtransPayment, bookingRepository)
 	paymentController := controller.NewPaymentController(paymentService)
 	app := NewServer(paymentController)
 	return app
@@ -35,16 +36,15 @@ func InitializeApp(filenames ...string) *fiber.App {
 // injector.go:
 
 var (
-	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, service.NewFaspayService, controller.NewPaymentController, repository.NewPointRepository)
+	paymentSet = wire.NewSet(repository.NewPaymentRepository, service.NewPaymentService, service.NewFaspayService, controller.NewPaymentController, repository.NewPointRepository, repository.NewBookingRepository)
 )
 
 func NewServer(paymentController controller.PaymentController) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: exception.ErrorHandler})
 	app.Use(cors.New(cors.Config{
-		AllowHeaders:     "*",
-		AllowOrigins:     "*",
-		AllowCredentials: true,
-		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		AllowHeaders: "*",
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 	}))
 	paymentController.Route(app)
 	return app
