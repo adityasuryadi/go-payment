@@ -8,26 +8,30 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"payment/config"
 	"payment/entity"
 	"payment/helper"
 	"payment/model"
 	"payment/repository"
+	service "payment/service/external"
 	"strconv"
 	"time"
 
-	"github.com/go-resty/resty/v2"
+	"github.com/midtrans/midtrans-go"
+	"github.com/midtrans/midtrans-go/snap"
 	"github.com/natefinch/lumberjack"
 	"gorm.io/gorm"
 )
 
 const price float64 = 2000
 
-func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository) PaymentService {
+func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository, midtransPayment config.MidtransPayment) PaymentService {
 	return &PaymentServiceImpl{
 		PaymentRepository: repository,
-		FaspayService:     faspayService,
 		db:                db,
+		FaspayService:     faspayService,
 		PointRepository:   pointRepository,
+		MidtransPayment:   midtransPayment,
 	}
 }
 
@@ -36,6 +40,7 @@ type PaymentServiceImpl struct {
 	db                *gorm.DB
 	FaspayService     FaspayService
 	PointRepository   repository.PointRespository
+	MidtransPayment   config.MidtransPayment
 }
 
 // UpdatePayment implements PaymentService
@@ -49,9 +54,9 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 		return "404", payment
 	}
 
-	if payment.StatusId == 2 {
-		return "400", "has already pay"
-	}
+	// if payment.StatusId == 2 {
+	// 	return "400", "has already pay"
+	// }
 
 	// log callback
 	log.SetOutput(&lumberjack.Logger{
@@ -69,42 +74,6 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 
 	// create ticket api
 
-	type RequestGenerateTicket struct {
-		UserId      int    `json:"user_id"`
-		ServiceCode string `json:"string"`
-		QueueName   string `json:"queue_name"`
-		ServiceTime string `json:"service_time"`
-		QueueHp     string `json:"queue_hp"`
-		Note        string `json:"note"`
-	}
-
-	url := os.Getenv("CREATE_TICKET_URL")
-	requestTicket := RequestGenerateTicket{
-		UserId:      64,
-		ServiceCode: "Xg8cZQ",
-		QueueName:   payment.Name,
-		ServiceTime: payment.BookingDate.String(),
-		QueueHp:     payment.Phone,
-		Note:        "Catatan",
-	}
-
-	client := resty.New()
-	resp, err := client.R().
-		SetFormData(map[string]string{
-			"user_id":      "64",
-			"service_code": requestTicket.ServiceCode,
-			"queue_name":   requestTicket.QueueName,
-			"service_time": payment.BookingDate.String(),
-			"note":         "-",
-			"queue_hp":     payment.Phone,
-		}).
-		SetHeader("Accept", "application/json").
-		Post(url)
-
-	if err != nil {
-		return "500", err.Error()
-	}
-
 	paymentStatus, _ := strconv.Atoi(request.PaymentStatusCode)
 	paymentChannelUid, _ := strconv.Atoi(request.PaymentChannelUid)
 
@@ -114,8 +83,32 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 	payment.PaymentChannelUid = paymentChannelUid
 	err = paymentService.PaymentRepository.Update(payment)
 
+	if err != nil {
+		return "500", err
+	}
+
+	// create ticket api
+
+	queueService := new(service.QueueServiceImpl)
+
+	requestTicket := model.GenerateTicketRequest{
+		UserId:      64,
+		ServiceCode: "SPnjWy",
+		QueueName:   payment.Name,
+		ServiceTime: payment.BookingDate.String(),
+		QueueHp:     payment.Phone,
+		Note:        "Catatan",
+	}
+
+	resp, err := queueService.CreateTicket(requestTicket)
+
+	if err != nil {
+		return "500", err.Error()
+	}
+
 	responseTicket := make(map[string]interface{})
 	json.Unmarshal(resp.Body(), &responseTicket)
+
 	if responseTicket["error"] == true {
 		log.SetOutput(&lumberjack.Logger{
 			Filename:   "./var/log/ticket.log",
@@ -125,36 +118,34 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 			Compress:   true, // disabled by default
 		})
 		responseTicket["trx_id"] = payment.TrxId
-		log.Print(responseTicket)
 
-		// restore payment to point
-		userPoint, err := paymentService.PointRepository.FindPointByUserId(30)
-		if err != nil && !!errors.Is(err, gorm.ErrRecordNotFound) {
+		// restore payment to point if call api ticket failed
+		userPoint, err := paymentService.PointRepository.FindPointByUserId(requestTicket.UserId)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return "500", err.Error()
 		}
-		fmt.Println(userPoint)
+
 		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
-			entityPoint := &entity.Point{
-				UserId: 30,
-				Point:  payment.BillTotal,
-			}
 			_, err := paymentService.PointRepository.InsertOrUpdate(&entity.Point{
-				UserId: 30,
-				Point:  entityPoint.Point + payment.BillTotal,
+				UserId: requestTicket.UserId,
+				Point:  payment.BillTotal,
+			})
+
+			if err != nil {
+				return "500", err.Error()
+			}
+		}
+
+		if err == nil {
+			paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+				UserId: requestTicket.UserId,
+				Point:  userPoint.Point + payment.BillTotal,
 			})
 			if err != nil {
 				return "500", err.Error()
 			}
 		}
-		paymentService.PointRepository.InsertOrUpdate(&entity.Point{
-			UserId: 30,
-			Point:  userPoint.Point + payment.BillTotal,
-		})
 		return "400", responseTicket["error_msg"]
-	}
-
-	if err != nil {
-		return "500", err
 	}
 
 	response := model.FaspayNotifResponse{
@@ -264,4 +255,167 @@ func (paymentService *PaymentServiceImpl) GenerateBillNo(tx *gorm.DB) (billNo st
 		billNo = fmt.Sprintf("INV-%s%d", curdate, billNoCounter)
 	}
 	return billNo, billNoCounter
+}
+
+func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.CreatePaymentRequest) (string, interface{}) {
+	tx := paymentService.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	billNo, billNoCounter := paymentService.GenerateBillNo(tx)
+	bookingDate, _ := time.Parse("2006-01-02", request.BookingDate)
+
+	custAddress := &midtrans.CustomerAddress{
+		FName:       request.CustName,
+		LName:       "",
+		Phone:       request.Phone,
+		Address:     "",
+		City:        "",
+		Postcode:    "",
+		CountryCode: "IDN",
+	}
+
+	fmt.Println("service_name", request.ServiceName)
+	// Initiate Snap Request
+	snapReq := &snap.Request{
+		TransactionDetails: midtrans.TransactionDetails{
+			OrderID:  billNo,
+			GrossAmt: int64(price),
+		},
+		CreditCard: &snap.CreditCardDetails{
+			Secure: true,
+		},
+		CustomerDetail: &midtrans.CustomerDetails{
+			FName:    request.CustName,
+			LName:    "",
+			Email:    request.Email,
+			Phone:    request.Phone,
+			BillAddr: custAddress,
+			ShipAddr: custAddress,
+		},
+		EnabledPayments: snap.AllSnapPaymentType,
+		Items: &[]midtrans.ItemDetails{
+			{
+				ID:    request.ServiceCode,
+				Price: int64(price),
+				Qty:   1,
+				Name:  request.ServiceName,
+			},
+		},
+		Gopay: &snap.GopayDetails{
+			EnableCallback: true,
+			CallbackUrl:    "https://antrique.com/payment-native/getQueueByOrder.php",
+		},
+	}
+	token, err := paymentService.MidtransPayment.CreateTokenTransactionWithGateway(snapReq)
+	if err != nil {
+		return "400", err.Error()
+	}
+	payment := entity.Payment{
+		Name:          request.CustName,
+		Phone:         request.Phone,
+		Email:         request.Email,
+		ServiceId:     request.ServiceId,
+		BookingDate:   bookingDate,
+		RedirectUrl:   "",
+		BillNoCounter: billNoCounter,
+		Qty:           1,
+		BillNo:        billNo,
+		BillTotal:     price,
+		StatusId:      1,
+		ServiceCode:   request.ServiceCode,
+		SnapToken:     token,
+	}
+
+	err = paymentService.PaymentRepository.Store(tx, &payment)
+	if err != nil {
+		return "500", err.Error()
+	}
+	tx.Commit()
+
+	return "200", token
+}
+
+func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.MidtransNotificationRequest) (string, interface{}) {
+	status, err := paymentService.MidtransPayment.Notification(request)
+	if err != nil && errors.Is(err, err.(*midtrans.Error)) {
+		return "400", err.(*midtrans.Error).GetMessage()
+	}
+	payment, err := paymentService.PaymentRepository.FindPaymentByBillNo(request.OrderId)
+	if err != nil {
+		return "404", payment
+	}
+
+	payment.StatusId = status
+	payment.Signature = request.SigantureKey
+	payment.PaymentChannel = request.PaymentType
+
+	err = paymentService.PaymentRepository.Update(payment)
+	if err != nil {
+		return "500", err.Error()
+	}
+	// create ticket api
+
+	queueService := new(service.QueueServiceImpl)
+
+	requestTicket := model.GenerateTicketRequest{
+		UserId:      64,
+		ServiceCode: "SPnjWy",
+		QueueName:   payment.Name,
+		ServiceTime: payment.BookingDate.String(),
+		QueueHp:     payment.Phone,
+		Note:        "Catatan",
+	}
+
+	resp, err := queueService.CreateTicket(requestTicket)
+
+	if err != nil {
+		return "500", err.Error()
+	}
+
+	responseTicket := make(map[string]interface{})
+	json.Unmarshal(resp.Body(), &responseTicket)
+
+	if responseTicket["error"] == true {
+		log.SetOutput(&lumberjack.Logger{
+			Filename:   "./var/log/ticket.log",
+			MaxSize:    500, // megabytes
+			MaxBackups: 3,
+			MaxAge:     1,    //days
+			Compress:   true, // disabled by default
+		})
+		responseTicket["trx_id"] = payment.TrxId
+
+		// restore payment to point if call api ticket failed
+		userPoint, err := paymentService.PointRepository.FindPointByUserId(requestTicket.UserId)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return "500", err.Error()
+		}
+
+		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+			_, err := paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+				UserId: requestTicket.UserId,
+				Point:  payment.BillTotal,
+			})
+
+			if err != nil {
+				return "500", err.Error()
+			}
+		}
+
+		if err == nil {
+			paymentService.PointRepository.InsertOrUpdate(&entity.Point{
+				UserId: requestTicket.UserId,
+				Point:  userPoint.Point + payment.BillTotal,
+			})
+			if err != nil {
+				return "500", err.Error()
+			}
+		}
+		return "400", responseTicket["error_msg"]
+	}
+	return "200", payment
 }

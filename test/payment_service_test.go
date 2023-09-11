@@ -265,12 +265,12 @@ func TestSuccessCallback(t *testing.T) {
 	}
 	pointRepositoryMock := &mocks.PointRepositoryMock{Mock: mock.Mock{}}
 
-	userPointMock := entity.Point{
+	userPointMock := &entity.Point{
 		UserId: 30,
 		Point:  2500,
 	}
 
-	paymentRepositoryMock.Mock.On("FindPaymentByBillNo", "INV-202308222").Return(entity.Payment{
+	paymentMock := entity.Payment{
 		Id:                uuid.MustParse("33a61a3d-88e8-484d-8061-3db0bff92e3a"),
 		Name:              "Adit",
 		Phone:             "089656234771",
@@ -284,16 +284,18 @@ func TestSuccessCallback(t *testing.T) {
 		BillNoCounter:     22,
 		TrxId:             "3183540500001172",
 		PaymentChannelUid: 402,
-		PaymentChannel:    "BCA Virtual Account",
+		PaymentChannel:    "Permata Virtual Account",
 		Signature:         "f1275409443913ec563ef2307897c233ce109456",
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
-	}, nil)
+	}
+
+	paymentMock.StatusId = 1
+	paymentRepositoryMock.Mock.On("FindPaymentByBillNo", "INV-202308222").Return(&paymentMock)
+	paymentRepositoryMock.Mock.On("Update", &paymentMock).Once().Return(nil)
 	pointRepositoryMock.Mock.On("FindPointByUserId", 30).Return(userPointMock, nil)
 	pointRepositoryMock.Mock.On("InsertOrUpdate", entity.Point{
 		UserId: 30,
 		Point:  4500,
-	}).Return(nil, entity.Point{
+	}).Return(nil, &entity.Point{
 		UserId: 30,
 		Point:  4500,
 	}, nil)
@@ -316,7 +318,7 @@ func TestSuccessCallback(t *testing.T) {
 		Signature:         "f1275409443913ec563ef2307897c233ce109456",
 	}
 	errCode, response := paymentService.UpdatePayment(request)
-	// fmt.Println(response)
+	fmt.Println(response)
 	assert.Equal(t, errCode, "200")
 	assert.NotNil(t, response)
 }
