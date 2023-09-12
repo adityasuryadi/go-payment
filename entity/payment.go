@@ -35,6 +35,7 @@ type Payment struct {
 	Name              string    `gorm:"column:name"`
 	Phone             string    `gorm:"column:phone"`
 	Email             string    `gorm:"column:email"`
+	UserId            int       `gorm:"column:userId"`
 	BookingId         uuid.UUID `gorm:"column:bookingId"`
 	BookingDate       time.Time `gorm:"column:bookingDate"`
 	RedirectUrl       string    `gorm:"column:redirectUrl"`

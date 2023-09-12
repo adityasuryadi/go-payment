@@ -25,6 +25,7 @@ func (controller *PaymentController) Route(app *fiber.App) {
 	app.Post("callback", controller.CallbackHandle)
 	app.Post("midtrans", controller.createTokenTransactionWithGateway)
 	app.Post("midtranscallback", controller.CallbackMidtrans)
+	app.Get("paymentchannel", controller.ListPaymentType)
 }
 
 func (controller *PaymentController) Create(ctx *fiber.Ctx) error {
@@ -69,6 +70,12 @@ func (controller *PaymentController) CallbackMidtrans(ctx *fiber.Ctx) error {
 	ctx.BodyParser(&request)
 	fmt.Println(request)
 	code, resp := controller.PaymentService.CallbackMidtrans(request)
+	responseCode, _ := strconv.Atoi(code)
+	return ctx.Status(responseCode).JSON(model.GetResponse(code, resp))
+}
+
+func (controller *PaymentController) ListPaymentType(ctx *fiber.Ctx) error {
+	code, resp := controller.PaymentService.GetListPaymentType()
 	responseCode, _ := strconv.Atoi(code)
 	return ctx.Status(responseCode).JSON(model.GetResponse(code, resp))
 }

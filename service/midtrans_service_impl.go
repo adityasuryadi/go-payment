@@ -86,3 +86,8 @@ func (m *MidtransServiceImpl) Notification(request model.MidtransNotificationReq
 	}
 	return <-status, nil
 }
+
+// ListPaymentType implements MidtransService.
+func (m *MidtransServiceImpl) ListPaymentType() []snap.SnapPaymentType {
+	return snap.AllSnapPaymentType
+}

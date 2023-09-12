@@ -12,4 +12,5 @@ type PaymentService interface {
 	GenerateBillNo(tx *gorm.DB) (billNo string, billNoCounter int)
 	GenerateSnapToken(request model.CreatePaymentRequest) (string, interface{})
 	CallbackMidtrans(request model.MidtransNotificationRequest) (string, interface{})
+	GetListPaymentType() (string, interface{})
 }

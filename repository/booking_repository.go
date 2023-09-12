@@ -2,9 +2,10 @@ package repository
 
 import (
 	"payment/entity"
+
+	"gorm.io/gorm"
 )
 
-
 type BookingRepository interface {
-	Create(booking *entity.Booking) (*entity.Booking, error)
+	Create(tx *gorm.DB, booking *entity.Booking) (*entity.Booking, error)
 }

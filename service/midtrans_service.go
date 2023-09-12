@@ -9,4 +9,5 @@ import (
 type MidtransService interface {
 	CreateTokenTransactionWithGateway(requset *snap.Request) (string, error)
 	Notification(request model.MidtransNotificationRequest) (int, error)
+	ListPaymentType() []snap.SnapPaymentType
 }

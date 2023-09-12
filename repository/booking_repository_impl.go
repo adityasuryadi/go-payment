@@ -17,8 +17,8 @@ func NewBookingRepository(db *gorm.DB) BookingRepository {
 }
 
 // Create implements BookingRepository.
-func (repository *BookingRepositoryImpl) Create(booking *entity.Booking) (*entity.Booking, error) {
-	err := repository.db.Create(&booking).Error
+func (repository *BookingRepositoryImpl) Create(tx *gorm.DB, booking *entity.Booking) (*entity.Booking, error) {
+	err := tx.Create(&booking).Error
 	if err != nil {
 		return nil, err
 	}

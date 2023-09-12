@@ -94,7 +94,7 @@ func (paymentService *PaymentServiceImpl) UpdatePayment(request model.CallbackFa
 	queueService := new(service.QueueServiceImpl)
 
 	requestTicket := model.GenerateTicketRequest{
-		UserId:      64,
+		UserId:      payment.UserId,
 		ServiceCode: "SPnjWy",
 		QueueName:   payment.Name,
 		ServiceTime: payment.BookingDate.String(),
@@ -210,7 +210,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 		ServiceId:   request.ServiceId,
 	}
 
-	resultBooking, err := paymentService.BookingRepository.Create(booking)
+	resultBooking, err := paymentService.BookingRepository.Create(tx, booking)
 
 	if err != nil {
 		return "500", err.Error()
@@ -248,6 +248,7 @@ func (paymentService *PaymentServiceImpl) CreatePayment(request model.CreatePaym
 			StatusId:  1,
 			Signature: string(fmt.Sprintf("%x", signature)),
 			BookingId: resultBooking.Id,
+			UserId:    request.UserId,
 			// ServiceCode:   request.ServiceCode,
 		}
 
@@ -308,12 +309,34 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 		ServiceId:   request.ServiceId,
 	}
 
-	resultBooking, err := paymentService.BookingRepository.Create(booking)
+	resultBooking, err := paymentService.BookingRepository.Create(tx, booking)
 
 	if err != nil {
 		return "500", err.Error()
 	}
 	// Initiate Snap Request
+	paymentType := request.PaymentType
+	SnapPaymentType := []snap.SnapPaymentType{}
+
+	gopayDetails := &snap.GopayDetails{}
+	shopeePayDetails := &snap.ShopeePayDetails{}
+	// var gopayDetails *snap.GopayDetails
+	// var ShopeePayDetails *snap.ShopeePayDetails
+	switch paymentType {
+	case string(snap.PaymentTypeGopay):
+		gopayDetails.CallbackUrl = "https://antrique.com/payment-native/getQueueByOrder.php"
+		gopayDetails.EnableCallback = true
+		SnapPaymentType = append(SnapPaymentType, snap.SnapPaymentType(paymentType))
+	case string(snap.PaymentTypeShopeepay):
+		shopeePayDetails.CallbackUrl = "https://antrique.com/payment-native/getQueueByOrder.php?order_id=" + billNo
+		SnapPaymentType = append(SnapPaymentType, snap.SnapPaymentType(paymentType))
+	case "":
+		SnapPaymentType = snap.AllSnapPaymentType
+	default:
+		SnapPaymentType = append(SnapPaymentType, snap.SnapPaymentType(paymentType))
+	}
+	fmt.Println("gopay", gopayDetails)
+
 	snapReq := &snap.Request{
 		TransactionDetails: midtrans.TransactionDetails{
 			OrderID:  billNo,
@@ -330,7 +353,7 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 			BillAddr: custAddress,
 			ShipAddr: custAddress,
 		},
-		EnabledPayments: snap.AllSnapPaymentType,
+		EnabledPayments: SnapPaymentType,
 		Items: &[]midtrans.ItemDetails{
 			{
 				ID:    request.ServiceCode,
@@ -339,11 +362,10 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 				Name:  request.ServiceName,
 			},
 		},
-		Gopay: &snap.GopayDetails{
-			EnableCallback: true,
-			CallbackUrl:    "https://antrique.com/payment-native/getQueueByOrder.php",
-		},
+		Gopay:     gopayDetails,
+		ShopeePay: shopeePayDetails,
 	}
+
 	token, err := paymentService.MidtransService.CreateTokenTransactionWithGateway(snapReq)
 	if err != nil {
 		return "400", err.Error()
@@ -430,7 +452,7 @@ func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.Midtran
 	queueService := new(service.QueueServiceImpl)
 
 	requestTicket := model.GenerateTicketRequest{
-		UserId:      64,
+		UserId:      payment.UserId,
 		ServiceCode: "SPnjWy",
 		QueueName:   payment.Name,
 		ServiceTime: payment.BookingDate.String(),
@@ -486,4 +508,10 @@ func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.Midtran
 		return "400", responseTicket["error_msg"]
 	}
 	return "200", payment
+}
+
+// get payment type
+func (paymentService *PaymentServiceImpl) GetListPaymentType() (string, interface{}) {
+	paymentTypes := paymentService.MidtransService.ListPaymentType()
+	return "200", paymentTypes
 }
