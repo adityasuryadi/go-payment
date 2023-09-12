@@ -6,24 +6,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"payment/config"
 	"payment/model"
 	"strconv"
 
 	"github.com/go-resty/resty/v2"
 )
 
-func NewFaspayService() FaspayService {
-	return &FaspayServiceImpl{}
+func NewFaspayService(configuration config.Config) FaspayService {
+	return &FaspayServiceImpl{
+		merchantId: configuration.Get("FASPAY_MERCHANT_ID"),
+		userId:     configuration.Get("FASPAY_USER_ID"),
+		password:   configuration.Get("FASPAY_PASSWORD"),
+	}
 }
 
 type FaspayServiceImpl struct {
+	merchantId string
+	userId     string
+	password   string
 }
 
 // CreatePaymentExpress implements FaspayService
-func (*FaspayServiceImpl) CreatePaymentExpress(request model.CreateFaspayPaymentRequest) (*model.CreatePaymentFaspayResponse, error) {
-	merchantId := os.Getenv("FASPAY_MERCHANT_ID")
-	userId := os.Getenv("FASPAY_USER_ID")
-	password := os.Getenv("FASPAY_PASSWORD")
+func (service *FaspayServiceImpl) CreatePaymentExpress(request model.CreateFaspayPaymentRequest) (*model.CreatePaymentFaspayResponse, error) {
+	merchantId := service.merchantId
+	userId := service.userId
+	password := service.password
 
 	url := "https://xpress.faspay.co.id/v4/post"
 	if os.Getenv("APP_ENV") == "dev" {

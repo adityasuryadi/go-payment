@@ -20,6 +20,11 @@ type Booking struct {
 	UpdatedAt   time.Time `gorm:"column:updatedAt"`
 }
 
+// Error implements error.
+func (*Booking) Error() string {
+	panic("unimplemented")
+}
+
 func (Booking) TableName() string {
 	return "booking"
 }

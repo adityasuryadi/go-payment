@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"payment/config"
 	"payment/entity"
 	"payment/helper"
 	"payment/model"
@@ -26,13 +25,13 @@ import (
 
 const price float64 = 2000
 
-func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository, midtransPayment config.MidtransPayment, bookingRepo repository.BookingRepository) PaymentService {
+func NewPaymentService(repository repository.PaymentRepository, db *gorm.DB, faspayService FaspayService, pointRepository repository.PointRespository, MidtransService MidtransService, bookingRepo repository.BookingRepository) PaymentService {
 	return &PaymentServiceImpl{
 		PaymentRepository: repository,
 		db:                db,
 		FaspayService:     faspayService,
 		PointRepository:   pointRepository,
-		MidtransPayment:   midtransPayment,
+		MidtransService:   MidtransService,
 		BookingRepository: bookingRepo,
 	}
 }
@@ -42,7 +41,7 @@ type PaymentServiceImpl struct {
 	db                *gorm.DB
 	FaspayService     FaspayService
 	PointRepository   repository.PointRespository
-	MidtransPayment   config.MidtransPayment
+	MidtransService   MidtransService
 	BookingRepository repository.BookingRepository
 }
 
@@ -345,7 +344,7 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 			CallbackUrl:    "https://antrique.com/payment-native/getQueueByOrder.php",
 		},
 	}
-	token, err := paymentService.MidtransPayment.CreateTokenTransactionWithGateway(snapReq)
+	token, err := paymentService.MidtransService.CreateTokenTransactionWithGateway(snapReq)
 	if err != nil {
 		return "400", err.Error()
 	}
@@ -392,7 +391,7 @@ func (paymentService *PaymentServiceImpl) GenerateSnapToken(request model.Create
 }
 
 func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.MidtransNotificationRequest) (string, interface{}) {
-	status, err := paymentService.MidtransPayment.Notification(request)
+	status, err := paymentService.MidtransService.Notification(request)
 	if err != nil && errors.Is(err, err.(*midtrans.Error)) {
 		return "400", err.(*midtrans.Error).GetMessage()
 	}
@@ -405,7 +404,7 @@ func (paymentService *PaymentServiceImpl) CallbackMidtrans(request model.Midtran
 	signature := sha512.Sum512([]byte(plainSignature))
 
 	if request.SigantureKey != string(fmt.Sprintf("%x", signature)) {
-		return "404", string(fmt.Sprintf("%x", signature))
+		return "404", "Invalid Signature"
 	}
 
 	// sha512.Write([]byte(plainSignature))

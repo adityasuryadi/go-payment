@@ -8,6 +8,7 @@ type CreatePaymentRequest struct {
 	ServiceCode string `json:"service_code" validate:"required"`
 	ServiceId   string `json:"service_id" validate:"required"`
 	BookingDate string `json:"booking_date" validate:"required,gtenow"`
+	UserId      int    `json:"user_id,omitempty"`
 }
 
 type CreateFaspayPaymentRequest struct {
